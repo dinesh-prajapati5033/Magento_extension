@@ -18,6 +18,9 @@ use Magento\Framework\View\Result\PageFactory;
 use Magento\Framework\Controller\Result\ForwardFactory;
 use Pixlogix\Items\Model\ItemFactory;
 use Magento\Framework\Registry;
+use Pixlogix\Items\Helper\Data as DataHelper;
+use Magento\Store\Model\StoreManagerInterface;
+use Magento\Customer\Model\Session as CustomerSession;
 
 class View extends Action
 {
@@ -42,25 +45,40 @@ class View extends Action
     protected $registry;
 
     /**
+     * @var DataHelper
+     */
+    protected $dataHelper;
+
+    /**
+     * @var StoreManagerInterface
+     */
+    protected $storeManager;
+
+    /**
+     * @var CustomerSession
+     */
+    protected $customerSession;
+
+    /**
      * Constructor.
-     *
-     * @param Context        $context
-     * @param PageFactory    $resultPageFactory
-     * @param ForwardFactory $resultForwardFactory
-     * @param ItemFactory    $itemFactory
-     * @param Registry       $registry
      */
     public function __construct(
         Context $context,
         PageFactory $resultPageFactory,
         ForwardFactory $resultForwardFactory,
         ItemFactory $itemFactory,
-        Registry $registry
+        Registry $registry,
+        DataHelper $dataHelper,
+        StoreManagerInterface $storeManager,
+        CustomerSession $customerSession
     ) {
         $this->resultPageFactory = $resultPageFactory;
         $this->resultForwardFactory = $resultForwardFactory;
         $this->itemFactory = $itemFactory;
         $this->registry = $registry;
+        $this->dataHelper = $dataHelper;
+        $this->storeManager = $storeManager;
+        $this->customerSession = $customerSession;
         parent::__construct($context);
     }
 
@@ -68,37 +86,58 @@ class View extends Action
      * Execute action.
      *
      * Loads the item by `url_key` and renders the detail page.
-     * If the item does not exist, forwards to the "no route" page.
-     *
-     * @return \Magento\Framework\Controller\ResultInterface
+     * If the item does not exist, is disabled, or not visible to current
+     * store view or customer group, forwards to 404.
      */
     public function execute()
     {
-        // Retrieve the URL key from the request
-        $urlKey = $this->getRequest()->getParam('url_key');
+        // Check if module is enabled
+        if (!$this->dataHelper->isModuleEnabled()) {
+            $resultForward = $this->resultForwardFactory->create();
+            return $resultForward->setModule('cms')->setController('noroute')->forward('index');
+        }
 
-        // Forward to 404 if missing
+        // Get URL key
+        $urlKey = $this->getRequest()->getParam('url_key');
         if (!$urlKey) {
             $resultForward = $this->resultForwardFactory->create();
             return $resultForward->forward('noroute');
         }
 
-        // Load the item model using the url_key field
+        // Load item by URL key
         $item = $this->itemFactory->create()->load($urlKey, 'url_key');
 
-        // If no matching item, show 404
-        if (!$item->getId()) {
+        // Check if item exists and enabled
+        if (!$item->getId() || (int)$item->getStatus() !== 1) {
             $resultForward = $this->resultForwardFactory->create();
-            return $resultForward->forward('noroute');
+            return $resultForward->setModule('cms')->setController('noroute')->forward('index');
         }
 
-        // Register item for layout and blocks
+        // Check store view visibility
+        $allowedStores = explode(',', (string)$item->getStoreIds());
+        $currentStoreId = (int)$this->storeManager->getStore()->getId();
+
+        if (!in_array('0', $allowedStores) && !in_array((string)$currentStoreId, $allowedStores)) {
+            $resultForward = $this->resultForwardFactory->create();
+            return $resultForward->setModule('cms')->setController('noroute')->forward('index');
+        }
+
+        // Check customer group visibility
+        // Assuming your DB field is `customer_group_ids` storing comma-separated group IDs
+        $allowedGroups = explode(',', (string)$item->getCustomerGroupIds());
+        $currentGroupId = (int)$this->customerSession->getCustomerGroupId();
+
+        if (!empty($allowedGroups) && !in_array((string)$currentGroupId, $allowedGroups)) {
+            $resultForward = $this->resultForwardFactory->create();
+            return $resultForward->setModule('cms')->setController('noroute')->forward('index');
+        }
+
+        // Register current item for layout
         $this->registry->register('current_item', $item);
 
-        // Render the item detail page with dynamic title
+        // Render the detail page
         $resultPage = $this->resultPageFactory->create();
         $resultPage->getConfig()->getTitle()->set($item->getTitle());
-
         return $resultPage;
     }
 }

@@ -21,7 +21,7 @@ use Pixlogix\Items\Model\ResourceModel\Item\CollectionFactory;
 use Pixlogix\Items\Helper\Data as ItemsHelper;
 use Magento\Store\Model\StoreManagerInterface;
 use Magento\Customer\Model\Session as CustomerSession;
-
+use Magento\Cms\Model\Template\FilterProvider;
 /**
  * Class ListBlock
  *
@@ -51,6 +51,11 @@ class ListBlock extends Template
     protected $_customerSession;
 
     /**
+     * @var FilterProvider
+     */
+    protected $filterProvider;
+
+    /**
      * Constructor
      *
      * @param Context $context
@@ -58,6 +63,7 @@ class ListBlock extends Template
      * @param ItemsHelper $helper
      * @param StoreManagerInterface $storeManager
      * @param CustomerSession $customerSession
+     * @param FilterProvider $filterProvider
      * @param array $data
      */
     public function __construct(
@@ -66,12 +72,14 @@ class ListBlock extends Template
         ItemsHelper $helper,
         StoreManagerInterface $storeManager,
         CustomerSession $customerSession,
+        FilterProvider $filterProvider,
         array $data = []
     ) {
         $this->collectionFactory = $collectionFactory;
         $this->helper = $helper;
         $this->_storeManager = $storeManager;
         $this->_customerSession = $customerSession;
+        $this->filterProvider = $filterProvider;
         parent::__construct($context, $data);
     }
 
@@ -93,44 +101,58 @@ class ListBlock extends Template
      * @return \Pixlogix\Items\Model\ResourceModel\Item\Collection
      */
    public function getItems()
-{
-    if (!$this->hasData('items_collection')) {
-        $collection = $this->collectionFactory->create();
-        $collection->setOrder('item_id', 'DESC');
+    {
+        if (!$this->hasData('items_collection')) {
+            $collection = $this->collectionFactory->create();
+            $collection->setOrder('item_id', 'DESC');
 
-        $storeId = (int)$this->_storeManager->getStore()->getId();
-        $groupId = (int)$this->_customerSession->getCustomerGroupId();
+            $storeId = (int)$this->_storeManager->getStore()->getId();
+            $groupId = (int)$this->_customerSession->getCustomerGroupId();
 
-        // Filter items by store (CSV or null allowed)
-        $collection->addFieldToFilter(
-            ['store_ids', 'store_ids'],
-            [
-                ['null' => true],
-                ['finset' => $storeId]
-            ]
-        );
+            /**
+             * Filter by enabled status only
+             * - Ensures only active (enabled) items are shown on frontend
+             */
+            $collection->addFieldToFilter('status', 1);
 
-        // Filter items by customer group (CSV or null allowed)
-        $collection->addFieldToFilter(
-            ['customer_group_ids', 'customer_group_ids'],
-            [
-                ['null' => true],
-                ['finset' => $groupId]
-            ]
-        );
+            /**
+             * Filter items by store (CSV or null allowed)
+             * - Supports multistore visibility configuration
+             */
+            $collection->addFieldToFilter(
+                ['store_ids', 'store_ids'],
+                [
+                    ['null' => true],
+                    ['finset' => $storeId]
+                ]
+            );
 
-        // Apply pagination parameters
-        $currentPage = (int)$this->getRequest()->getParam('p', 1);
-        $pageSize = (int)$this->getRequest()->getParam('limit', 10);
+            /**
+             * Filter items by customer group (CSV or null allowed)
+             * - Ensures only allowed customer groups can see the item
+             */
+            $collection->addFieldToFilter(
+                ['customer_group_ids', 'customer_group_ids'],
+                [
+                    ['null' => true],
+                    ['finset' => $groupId]
+                ]
+            );
 
-        $collection->setCurPage($currentPage);
-        $collection->setPageSize($pageSize);
+            /**
+             * Apply pagination parameters
+             */
+            $currentPage = (int)$this->getRequest()->getParam('p', 1);
+            $pageSize = (int)$this->getRequest()->getParam('limit', 10);
 
-        $this->setData('items_collection', $collection);
+            $collection->setCurPage($currentPage);
+            $collection->setPageSize($pageSize);
+
+            $this->setData('items_collection', $collection);
+        }
+
+        return $this->getData('items_collection');
     }
-
-    return $this->getData('items_collection');
-}
 
     /**
      * Get the full image URL for the item
@@ -205,5 +227,17 @@ class ListBlock extends Template
         }
 
         return $this;
+    }
+
+    /**
+     * Process WYSIWYG content (e.g., short_content or content fields)
+     * Replaces {{media url="..."}} and other Magento directives.
+     *
+     * @param string $content
+     * @return string
+     */
+    public function getProcessedContent(string $content): string
+    {
+        return $this->filterProvider->getPageFilter()->filter($content);
     }
 }

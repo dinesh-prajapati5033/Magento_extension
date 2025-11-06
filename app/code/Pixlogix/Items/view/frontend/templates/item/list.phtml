@@ -27,15 +27,21 @@
                              class="pixlogix-item-img" />
                     </a>
 
-                    <h2 class="pixlogix-item-title">
+                   <h2 class="pixlogix-item-title">
+                        <!-- Added "Title:" label before dynamic title -->
+                        <strong><?= $escaper->escapeHtml(__('Title:')) ?></strong>
                         <a href="<?= $escaper->escapeUrl($block->getUrl('pixitems/' . $item->getUrlKey())) ?>">
                             <?= $escaper->escapeHtml($item->getTitle()) ?>
                         </a>
                     </h2>
 
-                    <div class="pixlogix-item-short">
-                        <?= $escaper->escapeHtml($item->getShortContent()) ?>
-                    </div>
+                    <?php if ($item->getShortContent()): ?>
+                        <div class="pixlogix-item-short">
+                            <!-- Added "Description:" label before dynamic short description -->
+                            <strong><?= $escaper->escapeHtml(__('Description:')) ?></strong>
+                            <?= /* @noEscape */ $block->getProcessedContent($item->getShortContent()) ?>
+                        </div>
+                    <?php endif; ?>
 
                     <a href="<?= $escaper->escapeUrl($block->getUrl('pixitems/' . $item->getUrlKey())) ?>"
                        class="pixlogix-item-readmore">
@@ -51,6 +57,4 @@
     <?php else: ?>
         <p><?= $escaper->escapeHtml(__('No items found.')) ?></p>
     <?php endif; ?>
-<?php else: ?>
-    <p><?= $escaper->escapeHtml(__('Module is disabled.')) ?></p>
 <?php endif; ?>

@@ -105,7 +105,7 @@ class Edit extends Action
 
         // Set dynamic page title depending on create/edit mode
         $resultPage->getConfig()->getTitle()->prepend(
-            $model->getId() ? __('Edit Item') : __('New Item')
+            $model->getId() ? __('Edit '. $model->getTitle()) : __('New Item')
         );
 
         return $resultPage;

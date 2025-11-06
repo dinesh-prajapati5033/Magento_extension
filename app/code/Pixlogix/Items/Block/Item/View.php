@@ -20,6 +20,7 @@ namespace Pixlogix\Items\Block\Item;
 use Magento\Framework\View\Element\Template;
 use Magento\Framework\Registry;
 use Pixlogix\Items\Helper\Data as ItemsHelper;
+use Magento\Cms\Model\Template\FilterProvider;
 
 /**
  * Class View
@@ -39,21 +40,29 @@ class View extends Template
     protected $helper;
 
     /**
+     * @var FilterProvider
+     */
+    protected $filterProvider;
+
+    /**
      * Constructor
      *
      * @param Template\Context $context
      * @param Registry $registry
      * @param ItemsHelper $helper
+     * @param FilterProvider $filterProvider
      * @param array $data
      */
     public function __construct(
         Template\Context $context,
         Registry $registry,
         ItemsHelper $helper,
+        FilterProvider $filterProvider,
         array $data = []
     ) {
         $this->registry = $registry;
         $this->helper = $helper;
+        $this->filterProvider = $filterProvider;
         parent::__construct($context, $data);
     }
 
@@ -114,5 +123,26 @@ class View extends Template
 
         // Return default placeholder if no image found
         return $this->getViewFileUrl('Pixlogix_Items::images/placeholder.jpg');
+    }
+
+    /**
+     * Get processed WYSIWYG content (for fields like `content` or `short_content`)
+     *
+     * @param string $rawContent
+     * @return string
+     */
+    public function getProcessedContent(?string $rawContent): string
+    {
+        if (empty($rawContent)) {
+            return '';
+        }
+
+        try {
+            // Use Magento's CMS filter to process WYSIWYG markup
+            return $this->filterProvider->getPageFilter()->filter($rawContent);
+        } catch (\Exception $e) {
+            // Log or handle silently in case of parsing issues
+            return $rawContent;
+        }
     }
 }

@@ -18,18 +18,25 @@
         <div class="pixlogix-item-view">
             <div class="pixlogix-item-image">
                 <img src="<?= $escaper->escapeUrl($block->getImageUrl($item->getImage())) ?>"
-                     width="<?php $width ?>"
-                     height="<?php $height ?>"
-                     alt="<?= $escaper->escapeHtmlAttr($item->getTitle()) ?>" />
+                    width="<?= (int)$width ?>"
+                    height="<?= (int)$height ?>"
+                    alt="<?= $escaper->escapeHtmlAttr($item->getTitle()) ?>" />
             </div>
 
+            <!-- Display Item Title -->
             <h1 class="pixlogix-item-title">
+                <!-- Added "Title:" label before dynamic title -->
+                <strong><?= $escaper->escapeHtml(__('Title:')) ?></strong>
                 <?= $escaper->escapeHtml($item->getTitle()) ?>
             </h1>
 
-            <div class="pixlogix-item-content">
-                <?= /* @noEscape */ $item->getContent() ?>
-            </div>
+            <?php if ($item->getContent()): ?>
+                <div class="pixlogix-item-content">
+                    <!-- Added "Description:" label before dynamic content -->
+                    <strong><?= $escaper->escapeHtml(__('Description:')) ?></strong>
+                    <?= /* @noEscape */ $block->getProcessedContent($item->getContent()) ?>
+                </div>
+            <?php endif; ?>
         </div>
     <?php else: ?>
         <p><?= $escaper->escapeHtml(__('Item not found.')) ?></p>
